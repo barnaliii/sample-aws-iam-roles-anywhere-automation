@@ -11,7 +11,7 @@ This solution automates the deployment of AWS IAM Roles Anywhere with Private Ce
 - **Automated AWS Infrastructure**: CloudFormation template creates Private CA, Trust Anchor, IAM Role, and Profile
 - **Client Certificate Generation**: Automated script generates certificates for external systems
 - **Configurable Permissions**: Flexible IAM policy assignment based on your requirements
-- **Production Ready**: Security-scanned and follows AWS best practices
+- **Security-Focused Defaults**: Role trust policy scoped to this stack's trust anchor, account, CA, and allowed client certificate names. This is sample code; review and adapt it to your organization's security requirements before production use
 
 ## Prerequisites
 
@@ -100,6 +100,18 @@ cd iam-roles-anywhere-client-*
 | `CertificateValidityYears` | Root CA certificate validity (1-10 years) | `3` |
 | `SessionDurationSeconds` | Max session duration (900-43200 seconds) | `3600` |
 | `IAMPolicyArns` | Comma-separated IAM policy ARNs | `ReadOnlyAccess` |
+| `AllowedClientCommonNamePattern` | Client certificate Subject CN (exact value or `*` pattern) allowed to assume the role. Must match the `--client-name` passed to `setup-client.sh`. | `client-*` |
+
+### Role Trust Policy
+
+The IAM role created by the template can only be assumed through IAM Roles Anywhere when all of the following are true:
+
+- `aws:SourceArn` is the trust anchor created by this stack
+- `aws:SourceAccount` is the account the stack is deployed in
+- `aws:PrincipalTag/x509Issuer/CN` is this stack's private CA (`<ProjectName>-RootCA`)
+- `aws:PrincipalTag/x509Subject/CN` matches `AllowedClientCommonNamePattern`
+
+This prevents IAM Roles Anywhere from acting as a [confused deputy](https://docs.aws.amazon.com/IAM/latest/UserGuide/confused-deputy.html) for other trust anchors or profiles that reference the role. For production use, set `AllowedClientCommonNamePattern` to the exact CN of each workload (for example, `payments-batch-01`) instead of a broad wildcard. See [Trust model in IAM Roles Anywhere](https://docs.aws.amazon.com/rolesanywhere/latest/userguide/trust-model.html).
 
 ## Using the Credentials
 
@@ -146,6 +158,8 @@ aws s3 ls
 **"Access denied" errors**
 - Verify IAM role permissions match your use case
 - Check trust policy configuration
+- Confirm the client certificate CN (`--client-name`) matches the stack's `AllowedClientCommonNamePattern`
+- Confirm you're using the trust anchor and profile from the same stack as the role
 
 ## Files Description
 
